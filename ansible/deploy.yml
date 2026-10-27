@@ -1,0 +1,41 @@
+
+---
+- name: Deploy portfolio demo to AMD64
+  hosts: app_servers
+  become: false
+
+  tasks:
+    - name: Copy application source
+      ansible.builtin.copy:
+        src: "/opt/portfolio/app/{{ item }}"
+        dest: "/opt/portfolio/app/{{ item }}"
+        owner: deploy
+        group: deploy
+        mode: "0644"
+      loop:
+        - app.py
+        - Dockerfile
+
+    - name: Run restricted deployment script
+      ansible.builtin.command:
+        argv:
+          - sudo
+          - -n
+          - /usr/local/sbin/deploy-portfolio
+      register: deployment
+      changed_when: true
+
+    - name: Wait for application health endpoint
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8082/health
+        status_code: 200
+        return_content: true
+      register: health
+      until: health.status | default(0) == 200
+      retries: 10
+      delay: 3
+
+    - name: Display deployment result
+      ansible.builtin.debug:
+        var: health.json
+
